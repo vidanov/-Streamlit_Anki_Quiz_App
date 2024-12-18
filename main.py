@@ -45,14 +45,8 @@ def handle_file_upload(uploaded_file):
                         st.error("One or more questions are missing the 'Options' field.")
                         return None
                 
-                # Save questions to a local JSON file
-                json_file_path = "questions.json"
-                with open(json_file_path, "w", encoding='utf-8') as json_file:
-                    json.dump(questions, json_file, ensure_ascii=False, indent=4)
-                
                 st.success("Anki deck converted successfully!")
                 st.write(f"Total questions loaded: {len(questions)}")
-                st.write(f"Questions saved")
                 
                 return questions
                 
@@ -137,23 +131,12 @@ def render_quiz_results(quiz_manager, state_manager):
 def on_file_upload(uploaded_file, quiz_manager: QuizManager):
     questions = handle_file_upload(uploaded_file)
     if questions:
-        # Store the uploaded file in session state
+        # Store the uploaded file and questions in session state only
         st.session_state.uploaded_file = uploaded_file
         st.session_state.current_questions = questions
         st.session_state.num_questions = len(questions)
         st.session_state.questions_loaded = True
-        # Save questions to session state explicitly
         st.session_state.saved_questions = questions
-        
-        # Save to JSON file
-        try:
-            with open("questions.json", "w", encoding='utf-8') as json_file:
-                json.dump(questions, json_file, ensure_ascii=False, indent=4)
-            logger.info("Successfully saved questions to questions.json")
-        except Exception as e:
-            logger.error(f"Error saving questions.json: {e}")
-            st.error("Error saving questions file")
-        
         return questions
     st.session_state.questions_loaded = False
     return None
@@ -170,13 +153,6 @@ def on_reset_files(quiz_manager: QuizManager, state_manager: StateManager):
     for key in keys_to_clear:
         if key in st.session_state:
             del st.session_state[key]
-    
-    if os.path.exists("questions.json"):
-        try:
-            os.remove("questions.json")
-            logger.info("Successfully deleted questions.json")
-        except Exception as e:
-            logger.error(f"Error deleting questions.json: {e}")
     
     state_manager.clear_quiz_state()
     st.success("Files have been reset. Using default questions.")
@@ -261,43 +237,22 @@ def main():
             questions = quiz_manager.state.current_questions
             state_manager.save_quiz_state(asdict(quiz_manager.state))
     
-    # Check for saved JSON file of uploaded APKG
-    if os.path.exists("questions.json"):
-        try:
-            with open("questions.json", "r", encoding='utf-8') as json_file:
-                loaded_questions = json.load(json_file)
-                if loaded_questions and isinstance(loaded_questions, list) and len(loaded_questions) > 0:
-                    questions = loaded_questions
-                    st.session_state.current_questions = questions
-                    st.session_state.saved_questions = questions
-                    st.session_state.questions_loaded = True
-                    st.session_state.num_questions = len(questions)
-                    st.info(f"Loaded questions from saved JSON file. Total questions: {len(questions)}")
-                else:
-                    st.error("Invalid or empty questions file.")
-                    questions = None
-        except Exception as e:
-            logger.error(f"Error loading questions.json: {e}")
-            st.error("Error loading saved questions. Please upload a new file.")
-            questions = None
-
+    # Remove file-based state loading
+    if not quiz_manager.state.quiz_started:
+        if 'current_questions' in st.session_state and st.session_state.current_questions:
+            questions = st.session_state.current_questions
+            st.write("Current questions loaded from session state.")
+        elif not st.session_state.get('uploaded_file'):
+            try:
+                questions = load_questions("data/default_questions.json")
+                st.session_state.current_questions = questions
+                st.session_state.num_questions = len(questions)
+                st.info(f"Using default quiz file. Total questions: {len(questions)}")
+            except FileNotFoundError:
+                questions = None
+                st.info("Please upload a quiz file to begin")
     else:
-        # Only load questions if no active quiz
-        if not quiz_manager.state.quiz_started:
-            if 'current_questions' in st.session_state and st.session_state.current_questions:
-                questions = st.session_state.current_questions
-                st.write("Current questions loaded from session state.")
-            elif not st.session_state.get('uploaded_file'):
-                try:
-                    questions = load_questions("data/default_questions.json")
-                    st.session_state.current_questions = questions
-                    st.session_state.num_questions = len(questions)  # Update num_questions
-                    st.info(f"Using default quiz file. Total questions: {len(questions)}")
-                except FileNotFoundError:
-                    questions = None
-                    st.info("Please upload a quiz file to begin")
-        else:
-            questions = quiz_manager.state.current_questions
+        questions = quiz_manager.state.current_questions
 
     # Update the questions variable based on the session state after file upload
     if st.session_state.get('questions_loaded', False):
@@ -361,6 +316,14 @@ def main():
        
     if not quiz_manager.state.quiz_started:
         st.markdown("**Get started by uploading a file in the sidebar and then choose the number of questions.**")
+    
+    # Add version number in footer
+    st.markdown("""
+    ---
+    <div style='text-align: center; color: #666; padding: 10px;'>
+    Streamlit Anki Quiz App v1.0.0
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
