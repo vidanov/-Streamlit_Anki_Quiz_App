@@ -159,12 +159,18 @@ class QuizUI:
 
         # Get current answers if any
         current_idx = quiz_manager.state.current_question_index
-        user_answers = ([False] * len(options) 
-                       if current_idx >= len(quiz_manager.state.answers_given) 
-                       or quiz_manager.state.answers_given[current_idx] is None
-                       else quiz_manager.state.answers_given[current_idx])
+        user_answers = None
+        
+        # Check if this question has been answered before
+        if (current_idx < len(quiz_manager.state.answers_given) and 
+            quiz_manager.state.answers_given[current_idx] is not None):
+            # Use the stored answer
+            user_answers = quiz_manager.state.answers_given[current_idx]
+        else:
+            # Initialize new answer array
+            user_answers = [False] * len(options)
 
-        # Render answer inputs
+        # Render answer inputs with the correct initial state
         if QuizUI._render_answer_inputs(question_type, num_correct, options, 
                                       quiz_manager.state.current_question_index, 
                                       user_answers):
@@ -190,11 +196,17 @@ class QuizUI:
         # Use plain text options for the radio buttons
         option_texts = [f"{i + 1}. {opt}" for i, opt in enumerate(options)]
         
+        # Find the currently selected option
+        selected_index = None
+        if user_answers and any(user_answers):
+            selected_index = user_answers.index(True)
+        
+        # Create the radio button with the correct initial selection
         selected_option = st.radio(
             "Select your answer:",
             options=option_texts,
             key=f"q_{question_idx}_radio",
-            index=None  # Remove default selection
+            index=selected_index
         )
 
         if selected_option is not None:
@@ -208,12 +220,21 @@ class QuizUI:
     def _render_multiple_choice(options: list, num_correct: int, 
                               question_idx: int, user_answers: list) -> bool:
         changed = False
+        
+        # Ensure user_answers is properly initialized
+        if len(user_answers) < len(options):
+            user_answers.extend([False] * (len(options) - len(user_answers)))
+        
+        # Create checkboxes with stored values
         for i, option in enumerate(options):
+            # Use the stored answer state
+            initial_state = bool(user_answers[i])
             checked = st.checkbox(
                 option,
                 key=f"q_{question_idx}_checkbox_{i}",
-                value=user_answers[i] if i < len(user_answers) else False
+                value=initial_state
             )
+            
             if checked != user_answers[i]:
                 user_answers[i] = checked
                 changed = True
@@ -223,4 +244,4 @@ class QuizUI:
             st.warning(f"Please select exactly {num_correct} answers (currently selected {num_selected}).")
             return False
         
-        return num_selected == num_correct
+        return num_selected == num_correct or changed
