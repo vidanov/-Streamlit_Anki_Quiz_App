@@ -110,7 +110,7 @@ class QuizUI:
             # Flag button
             current_idx = quiz_manager.state.current_question_index
             is_flagged = quiz_manager.state.flagged_questions[current_idx]
-            flag_text = "Unflag" if is_flagged else "Flag"
+            flag_text = "🚩Unflag" if is_flagged else "🚩Flag"
             if st.button(flag_text):
                 quiz_manager.toggle_flag()
                 st.rerun()

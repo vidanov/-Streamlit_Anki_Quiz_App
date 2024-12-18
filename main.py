@@ -321,7 +321,7 @@ def main():
     st.markdown("""
     ---
     <div style='text-align: center; color: #666; padding: 10px;'>
-    Streamlit Anki Quiz App v1.0.0
+    Streamlit Anki Quiz App v1.0.1
     </div>
     """, unsafe_allow_html=True)
 
