@@ -123,9 +123,12 @@ def render_quiz_results(quiz_manager, state_manager):
         
         st.markdown("---")
 
+    # Store current questions before resetting
     if st.button("Retake Quiz"):
+        current_questions = quiz_manager.state.current_questions.copy()  # Preserve questions
         quiz_manager.reset()
-        state_manager.clear_quiz_state()
+        # Start a new quiz with the same questions
+        quiz_manager.start_quiz(current_questions)
         st.rerun()
 
 def on_file_upload(uploaded_file, quiz_manager: QuizManager):
@@ -276,68 +279,58 @@ def main():
         questions = st.session_state.current_questions
 
     def on_submit(user_answers):
-        current_idx = quiz_manager.state.current_question_index
-        last_question_idx = len(quiz_manager.state.current_questions) - 1
-        
         quiz_manager.submit_answer(user_answers)
         
-        if current_idx == last_question_idx:
-            for i, answer in enumerate(quiz_manager.state.answers_given):
-                if not answer:
-                    quiz_manager.navigate_to_question(i)
-                    break
-        
-        state_manager.save_quiz_state(asdict(quiz_manager.state))
-        st.rerun()
-
-    # Render UI
-    if quiz_manager.state.quiz_started:
-        QuizUI.render_question_navigation(
-            quiz_manager, 
-            on_restart,
-            state_manager  # Pass state_manager to the navigation renderer
-        )  
-        
-        # Check if all questions are answered
-        all_answered = all(quiz_manager.state.answers_given)
-        
-        if quiz_manager.is_quiz_complete and all_answered:
-            total_score, total_questions, percentage = quiz_manager.calculate_final_score()
-            st.success(f"Quiz Completed! Your score: {total_score}/{total_questions} ({percentage:.2f}%)")
-            render_quiz_results(quiz_manager, state_manager)  # Pass state_manager
+        # Check if quiz is completed after submission
+        if quiz_manager.state.quiz_completed:
+            state_manager.save_quiz_state(asdict(quiz_manager.state))
+            st.rerun()
         else:
-            # Show how many questions still need to be answered
-            remaining = sum(1 for answer in quiz_manager.state.answers_given if not answer)
-            if remaining > 0:
-                st.info(f"You still have {remaining} question(s) to answer.")
+            state_manager.save_quiz_state(asdict(quiz_manager.state))
+            st.rerun()
+
+    # Render UI based on state
+    if not quiz_manager.state.quiz_completed:
+        if quiz_manager.state.quiz_started:
+            # Show quiz navigation and questions
+            QuizUI.render_question_navigation(
+                quiz_manager, 
+                on_restart,
+                state_manager
+            )  
             
             current_question = quiz_manager.get_current_question()
             if current_question:
-                QuizUI.render_question(quiz_manager, on_submit)  # Render the current question
-            else:
-                # Find the first unanswered question and navigate to it
-                for i, answer in enumerate(quiz_manager.state.answers_given):
-                    if not answer:
-                        quiz_manager.navigate_to_question(i)
-                        st.rerun()
-                        break
-    else:
-        QuizUI.render_sidebar(
-            on_file_upload, 
-            lambda q, n: on_start_quiz(q, n, quiz_manager, state_manager),  # Pass state_manager
-            lambda qm: on_reset_files(qm, state_manager),  # Pass state_manager
-            questions, 
-            quiz_manager
-        )
-
-    if not quiz_manager.state.quiz_started:
-        st.markdown("**Get started by uploading a file in the sidebar and then choose the number of questions.**")
+                QuizUI.render_question(quiz_manager, on_submit)
+        else:
+            # Show setup sidebar
+            QuizUI.render_sidebar(
+                on_file_upload, 
+                lambda q, n: on_start_quiz(q, n, quiz_manager, state_manager),
+                lambda qm: on_reset_files(qm, state_manager),
+                questions, 
+                quiz_manager
+            )
+            st.markdown("# Anki Quiz")
+            st.markdown("**Get started by uploading a file in the sidebar and then choose the number of questions.**")
+            st.markdown("To learn more visit https://github.com/vidanov/streamlit_anki_quiz_app/blob/main/main.py")
+    
+    # Show results if quiz is completed
+    if quiz_manager.state.quiz_completed:
+        st.markdown("---")
+        total_score, total_questions, percentage = quiz_manager.calculate_final_score()
+        st.success(f"Quiz Completed! Your score: {total_score}/{total_questions} ({percentage:.2f}%)")
+        render_quiz_results(quiz_manager, state_manager)
+        
+        # Add a button to start a new quiz
+        if st.button("Start New Quiz", key="new_quiz"):
+            on_restart(quiz_manager, state_manager)
     
     # Add version number in footer
     st.markdown("""
     ---
     <div style='text-align: center; color: #666; padding: 10px;'>
-    Streamlit Anki Quiz App v1.0.1
+    Streamlit Anki Quiz App v1.0.2
     </div>
     """, unsafe_allow_html=True)
 

@@ -23,45 +23,86 @@ class QuizManager:
         state_dict = asdict(self.state)
         self.state_manager.save_quiz_state(state_dict)  # Use instance method
 
-    def start_quiz(self, questions: List[Dict[str, Any]], num_questions: int) -> None:
-        selected_questions = random.sample(questions, num_questions)
-        self.state = QuizState(
-            current_questions=selected_questions,
-            current_question_index=0,
-            current_options=[],
-            current_correct_answers=[],
-            answers_given=[[] for _ in range(num_questions)],
-            flagged_questions=[False] * num_questions,
-            quiz_completed=False,
-            quiz_started=True,
-            score=0
-        )
+    def start_quiz(self, questions: list, num_questions: int = None):
+        """Start a new quiz with the given questions"""
+        if num_questions is None or num_questions > len(questions):
+            num_questions = len(questions)
+        
+        # Randomly select questions if needed
+        selected_questions = questions[:num_questions]
+        
+        self.state.current_questions = selected_questions
+        self.state.current_question_index = 0
+        self.state.answers_given = [None] * len(selected_questions)  # Initialize with None
+        self.state.flagged_questions = [False] * len(selected_questions)
+        self.state.quiz_started = True
+        self.state.quiz_completed = False
         self.save_state()
 
+    def should_complete_quiz(self) -> bool:
+        """Check if the quiz should be completed"""
+        if not self.state.answers_given:
+            return False
+        
+        # Check if all questions have been answered
+        all_answered = all(
+            answer is not None and any(answer) 
+            for answer in self.state.answers_given
+        )
+        
+        # Check if we're on the last question
+        is_last_question = (
+            self.state.current_question_index == 
+            len(self.state.current_questions) - 1
+        )
+        
+        return all_answered and is_last_question
+
     def submit_answer(self, user_answers: List[bool]) -> bool:
+        """Submit an answer for the current question"""
         current_question = self.get_current_question()
         if current_question:
+            # Ensure answers_given is properly initialized
+            if self.state.answers_given is None:
+                self.state.answers_given = [None] * len(self.state.current_questions)
+            
+            # Save the answer
             self.state.answers_given[self.state.current_question_index] = user_answers
+            
+            # Check if answer is correct
             is_correct = check_answer(user_answers, self.state.current_correct_answers)
             if is_correct:
                 self.state.score += 1
             
-            # Check if all questions are answered
-            all_answered = all(answer for answer in self.state.answers_given)
+            # Check if this is the last question
+            is_last_question = self.state.current_question_index == len(self.state.current_questions) - 1
             
-            if all_answered:
+            # If we should complete the quiz
+            if self.should_complete_quiz():
                 self.state.quiz_completed = True
-            else:
-                # Move to the next question or find an unanswered one
-                next_idx = (self.state.current_question_index + 1) % len(self.state.current_questions)
-                while next_idx != self.state.current_question_index:
-                    if not self.state.answers_given[next_idx]:
-                        break
-                    next_idx = (next_idx + 1) % len(self.state.current_questions)
-                self.state.current_question_index = next_idx
+                self.state.quiz_started = False
+                self.save_state()
+                return is_correct
             
-            self.state.current_options = []
-            self.state.current_correct_answers = []
+            # If it's the last question but not all are answered
+            if is_last_question:
+                # Count unanswered and flagged questions
+                unanswered = sum(1 for answer in self.state.answers_given 
+                               if answer is None or not any(answer))
+                flagged = sum(1 for flag in self.state.flagged_questions if flag)
+                
+                # Set message about remaining tasks
+                message = []
+                if unanswered > 0:
+                    message.append(f"{unanswered} question(s) still need to be answered (marked with ◻️)")
+                if flagged > 0:
+                    message.append(f"{flagged} question(s) are flagged for review (marked with 🚩)")
+                st.session_state.last_question_message = " and ".join(message)
+            else:
+                # Move to next question if not the last
+                self.state.current_question_index += 1
+                self.state.current_options = []
+                self.state.current_correct_answers = []
             
             self.save_state()
             return is_correct
@@ -116,3 +157,39 @@ class QuizManager:
             self.state.current_options = []
             self.state.current_correct_answers = []
             self.save_state()
+
+    def complete_quiz(self):
+        """Mark the quiz as complete and save state"""
+        # Initialize answers_given if it's None
+        if self.state.answers_given is None:
+            self.state.answers_given = []
+        
+        # Fill any unanswered questions with empty answers
+        for i in range(len(self.state.current_questions)):
+            if i >= len(self.state.answers_given):
+                self.state.answers_given.append([False] * len(self.state.current_options))
+            elif self.state.answers_given[i] is None:
+                self.state.answers_given[i] = [False] * len(self.state.current_options)
+        
+        self.state.quiz_completed = True
+        self.state.quiz_started = False
+        self.save_state()
+        
+        # Force a state save to ensure persistence
+        if self.state_manager:
+            self.state_manager.save_quiz_state(asdict(self.state))
+
+    def get_answered_count(self) -> int:
+        """Get the number of answered questions"""
+        if not self.state.answers_given:
+            return 0
+        return sum(1 for answer in self.state.answers_given 
+                  if answer is not None and any(answer))
+
+    def is_question_answered(self, index: int) -> bool:
+        """Check if a specific question is answered"""
+        if (self.state.answers_given and 
+            0 <= index < len(self.state.answers_given) and 
+            self.state.answers_given[index] is not None):
+            return any(self.state.answers_given[index])
+        return False

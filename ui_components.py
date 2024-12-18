@@ -42,16 +42,20 @@ class QuizUI:
 
     @staticmethod
     def render_question_navigation(quiz_manager: QuizManager, on_restart: Callable, state_manager=None) -> None:
+        st.sidebar.markdown("# Anki Quiz")
         st.sidebar.markdown("### Questions")
         
         total_questions = len(quiz_manager.state.current_questions)
+        answered_questions = quiz_manager.get_answered_count()
+        
+        # Show progress
+        st.sidebar.markdown(f"**Progress:** {answered_questions}/{total_questions} answered")
         
         # Ensure flagged_questions is properly initialized
         if len(quiz_manager.state.flagged_questions) != total_questions:
             quiz_manager.state.flagged_questions = [False] * total_questions
-            quiz_manager._save_state()
+            quiz_manager.save_state()
    
-        
         # Create columns for the grid
         cols = st.sidebar.columns(4)
         
@@ -61,8 +65,7 @@ class QuizUI:
             
             # Determine question status
             is_current = i == quiz_manager.state.current_question_index
-            is_answered = (len(quiz_manager.state.answers_given) > i and 
-                          quiz_manager.state.answers_given[i])
+            is_answered = quiz_manager.is_question_answered(i)
             is_flagged = quiz_manager.state.flagged_questions[i]
             
             # Determine status indicator
@@ -71,16 +74,23 @@ class QuizUI:
             elif is_answered:
                 status = "✅"
             else:
-                status = "⭕"
+                status = "◻️"
                 
             # Create button with status indicator
             if col.button(f"{status}\n{i + 1}", key=f"nav_{i}"):
                 quiz_manager.navigate_to_question(i)
                 st.rerun()
+        
         st.sidebar.markdown("\n\n---\n\n")
-        # Add a Reset Quiz button in the sidebar
-        if st.sidebar.button("Reset Quiz", use_container_width=True):
-            on_restart(quiz_manager, state_manager)  # Pass both quiz_manager and state_manager
+        
+        # Add Submit Quiz button
+        if st.sidebar.button("📝 Show all answers", use_container_width=True, key="submit_quiz"):
+            quiz_manager.complete_quiz()
+            st.rerun()
+        
+        # Add Reset Quiz button
+        if st.sidebar.button("🔄 Restart Quiz", use_container_width=True, key="reset_quiz"):
+            on_restart(quiz_manager, state_manager)
 
     @staticmethod
     def render_question(quiz_manager: QuizManager, on_submit: Callable) -> None:
@@ -89,8 +99,14 @@ class QuizUI:
             st.error("No current question available.")
             return
 
+        # Show last question message if exists
+        if st.session_state.get('last_question_message'):
+            st.warning(f"This is the last question. {st.session_state.last_question_message} before you can see your results.")
+            # Clear the message after showing it
+            del st.session_state.last_question_message
+
         # Navigation and flag buttons
-        col1, col2, col3, col4 = st.columns([1, 3, 1, 1])  # Adjust column sizes as needed
+        col1, col2, col3, col4 = st.columns([1, 3, 1, 1])
         with col1:
             if quiz_manager.state.current_question_index > 0:
                 if st.button("← Previous"):
@@ -111,6 +127,7 @@ class QuizUI:
             current_idx = quiz_manager.state.current_question_index
             is_flagged = quiz_manager.state.flagged_questions[current_idx]
             flag_text = "🚩Unflag" if is_flagged else "🚩Flag"
+            flag = "🚩 " if is_flagged else ""
             if st.button(flag_text):
                 quiz_manager.toggle_flag()
                 st.rerun()
@@ -118,17 +135,16 @@ class QuizUI:
         # Display the question title
         question_title = current_question.get('Question', 'No Title Available')
         st.markdown(f"""
-    <h3>{question_title}</h3>
-""", unsafe_allow_html=True)  # Display the question title
+    <h3>{flag}{question_title}</h3>
+""", unsafe_allow_html=True)
 
-        # Extract options from the current question
+        # Extract options and render them
         options = []
-        for i in range(1, 7):  # Assuming Q_1 to Q_6
+        for i in range(1, 7):
             key = f"Q_{i}"
-            if key in current_question and current_question[key].strip():  # Check if the key exists and is not empty
+            if key in current_question and current_question[key].strip():
                 options.append(current_question[key])
 
-        # Check if options were found
         if not options:
             st.error("The current question does not contain any options.")
             return
@@ -139,22 +155,22 @@ class QuizUI:
 
         # Display the number of correct answers needed
         if question_type != 'single':
-            st.markdown(f"**Select {num_correct} correct answer(s):**")  # Indicate how many correct answers are needed
+            st.markdown(f"**Select {num_correct} correct answer(s):**")
 
+        # Get current answers if any
+        current_idx = quiz_manager.state.current_question_index
+        user_answers = ([False] * len(options) 
+                       if current_idx >= len(quiz_manager.state.answers_given) 
+                       or quiz_manager.state.answers_given[current_idx] is None
+                       else quiz_manager.state.answers_given[current_idx])
 
-        # Initialize user answers based on the number of options
-        user_answers = [False] * len(options)  # Initialize user answers to match the number of options
-
-        # Render the multiple choice options
-        is_valid = False
-        if question_type == 'single':
-            is_valid = QuizUI._render_single_choice(options, quiz_manager.state.current_question_index, user_answers)
-        else:
-            is_valid = QuizUI._render_multiple_choice(options, num_correct, quiz_manager.state.current_question_index, user_answers)
-
-        # Submit button - only enable if the required number of answers are selected
-        if st.button("Submit Answer", disabled=not is_valid):
-            on_submit(user_answers)
+        # Render answer inputs
+        if QuizUI._render_answer_inputs(question_type, num_correct, options, 
+                                      quiz_manager.state.current_question_index, 
+                                      user_answers):
+            if st.button("Submit Answer"):
+                on_submit(user_answers)
+                st.rerun()
 
     @staticmethod
     def _render_answer_inputs(question_type: str, num_correct: int, 
