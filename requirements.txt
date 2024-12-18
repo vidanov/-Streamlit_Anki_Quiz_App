@@ -1,0 +1,4 @@
+streamlit
+zstandard
+typing
+dataclasses 
