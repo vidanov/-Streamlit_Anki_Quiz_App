@@ -19,8 +19,8 @@ class QuizUI:
                 if questions is None:
                     st.error("Error processing the uploaded file.")
             
-            # Show the name of the uploaded file if it exists
-            if 'uploaded_file' in st.session_state:
+            # Show the name of the uploaded file if it exists and is not None
+            if 'uploaded_file' in st.session_state and st.session_state.uploaded_file is not None:
                 st.write(f"Uploaded file: {st.session_state.uploaded_file.name}")
 
             # Check if questions are loaded from any source
@@ -32,16 +32,16 @@ class QuizUI:
                     value=min(5, st.session_state.num_questions)
                 )
                 
-                if st.button("Start Quiz", use_container_width=True):
+                if st.button("Start Quiz", key="start_quiz"):
                     on_start_quiz(questions, num_questions)
             
-            # Only show the Reset Files button if a file has been uploaded
-            if 'uploaded_file' in st.session_state:
-                if st.button("Reset Files", use_container_width=True):
+            # Only show the Reset Files button if a file has been uploaded and is not None
+            if 'uploaded_file' in st.session_state and st.session_state.uploaded_file is not None:
+                if st.button("Reset Files", key="reset_files"):
                     on_reset_files(quiz_manager)
 
     @staticmethod
-    def render_question_navigation(quiz_manager: QuizManager, on_restart: Callable) -> None:
+    def render_question_navigation(quiz_manager: QuizManager, on_restart: Callable, state_manager=None) -> None:
         st.sidebar.markdown("### Questions")
         
         total_questions = len(quiz_manager.state.current_questions)
@@ -80,7 +80,7 @@ class QuizUI:
         st.sidebar.markdown("\n\n---\n\n")
         # Add a Reset Quiz button in the sidebar
         if st.sidebar.button("Reset Quiz", use_container_width=True):
-            on_restart(quiz_manager)  # Pass quiz_manager here
+            on_restart(quiz_manager, state_manager)  # Pass both quiz_manager and state_manager
 
     @staticmethod
     def render_question(quiz_manager: QuizManager, on_submit: Callable) -> None:

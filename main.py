@@ -158,11 +158,10 @@ def on_file_upload(uploaded_file, quiz_manager: QuizManager):
     st.session_state.questions_loaded = False
     return None
 
-def on_reset_files(quiz_manager: QuizManager):
+def on_reset_files(quiz_manager: QuizManager, state_manager: StateManager):
     """Handle resetting uploaded files and returning to default questions"""
     quiz_manager.reset()
     
-    # Clear all file-related session state
     keys_to_clear = {
         'saved_questions', 'current_questions', 'num_questions', 
         'uploaded_file', 'questions_loaded', 'quiz_started'
@@ -172,7 +171,6 @@ def on_reset_files(quiz_manager: QuizManager):
         if key in st.session_state:
             del st.session_state[key]
     
-    # Delete the questions.json file
     if os.path.exists("questions.json"):
         try:
             os.remove("questions.json")
@@ -180,15 +178,14 @@ def on_reset_files(quiz_manager: QuizManager):
         except Exception as e:
             logger.error(f"Error deleting questions.json: {e}")
     
-    StateManager.clear_quiz_state()
+    state_manager.clear_quiz_state()
     st.success("Files have been reset. Using default questions.")
     st.rerun()
 
-def on_restart(quiz_manager: QuizManager):
+def on_restart(quiz_manager: QuizManager, state_manager: StateManager):
     """Handle resetting just the quiz state while preserving uploaded files"""
     quiz_manager.reset()
     
-    # Preserve the uploaded file state
     preserved_state = {
         'uploaded_file': st.session_state.get('uploaded_file'),
         'saved_questions': st.session_state.get('saved_questions'),
@@ -197,20 +194,18 @@ def on_restart(quiz_manager: QuizManager):
         'questions_loaded': st.session_state.get('questions_loaded')
     }
     
-    # Clear quiz-related session state
     if 'quiz_started' in st.session_state:
         del st.session_state.quiz_started
     
-    # Restore preserved state
     for key, value in preserved_state.items():
         if value is not None:
             st.session_state[key] = value
     
-    StateManager.clear_quiz_state()
+    state_manager.clear_quiz_state()
     st.success("Quiz has been restarted. You can start a new quiz with the current questions.")
     st.rerun()
 
-def on_start_quiz(questions, num_questions, quiz_manager: QuizManager):
+def on_start_quiz(questions, num_questions, quiz_manager: QuizManager, state_manager: StateManager):
     if not questions:
         st.error("No questions available. Please upload a quiz file or use the default questions.")
         return
@@ -231,10 +226,14 @@ def on_start_quiz(questions, num_questions, quiz_manager: QuizManager):
     st.session_state.saved_questions = questions
     quiz_manager.start_quiz(questions, num_questions)
     st.session_state.quiz_started = True
-    StateManager.save_quiz_state(asdict(quiz_manager.state))
+    state_manager.save_quiz_state(asdict(quiz_manager.state))
     st.rerun()
 
 def main():
+    # Initialize state manager first
+    state_manager = StateManager()
+    state_manager.initialize_state()
+
     # Initialize questions variable
     questions = None  # or questions = []
 
@@ -244,23 +243,23 @@ def main():
     if 'quiz_manager' not in st.session_state:
         st.session_state.quiz_manager = QuizManager()
     
-    quiz_manager = st.session_state.quiz_manager  # Ensure quiz_manager is defined
+    quiz_manager = st.session_state.quiz_manager
 
     # Initialize current_questions and num_questions in session state if not present
     if 'current_questions' not in st.session_state:
         st.session_state.current_questions = []
     if 'num_questions' not in st.session_state:
-        st.session_state.num_questions = 0  # Initialize to 0 or any default value
+        st.session_state.num_questions = 0
 
     # Try to restore saved state first
-    saved_state = StateManager.load_quiz_state()
+    saved_state = state_manager.load_quiz_state()
     if saved_state:
         quiz_manager.state = QuizState(**saved_state)
         st.session_state.quiz_started = quiz_manager.state.quiz_started
         if quiz_manager.state.quiz_started:
             st.session_state.current_questions = quiz_manager.state.current_questions
             questions = quiz_manager.state.current_questions
-            quiz_manager._save_state()
+            state_manager.save_quiz_state(asdict(quiz_manager.state))
     
     # Check for saved JSON file of uploaded APKG
     if os.path.exists("questions.json"):
@@ -305,27 +304,27 @@ def main():
         questions = st.session_state.current_questions
 
     def on_submit(user_answers):
-        # Get the current question index before submitting
         current_idx = quiz_manager.state.current_question_index
         last_question_idx = len(quiz_manager.state.current_questions) - 1
         
-        # Submit the answer
         quiz_manager.submit_answer(user_answers)
         
-        # If we're on the last question, navigate back to any unanswered questions
         if current_idx == last_question_idx:
-            # Find the first unanswered question
             for i, answer in enumerate(quiz_manager.state.answers_given):
                 if not answer:
                     quiz_manager.navigate_to_question(i)
                     break
         
-        StateManager.save_quiz_state(asdict(quiz_manager.state))
+        state_manager.save_quiz_state(asdict(quiz_manager.state))
         st.rerun()
 
     # Render UI
     if quiz_manager.state.quiz_started:
-        QuizUI.render_question_navigation(quiz_manager, on_restart)  # Pass quiz reset function
+        QuizUI.render_question_navigation(
+            quiz_manager, 
+            on_restart,
+            state_manager  # Pass state_manager to the navigation renderer
+        )  
         
         # Check if all questions are answered
         all_answered = all(quiz_manager.state.answers_given)
@@ -353,8 +352,8 @@ def main():
     else:
         QuizUI.render_sidebar(
             on_file_upload, 
-            lambda q, n: on_start_quiz(q, n, quiz_manager),
-            on_reset_files,  # Pass file reset function for sidebar
+            lambda q, n: on_start_quiz(q, n, quiz_manager, state_manager),  # Pass state_manager
+            lambda qm: on_reset_files(qm, state_manager),  # Pass state_manager
             questions, 
             quiz_manager
         )

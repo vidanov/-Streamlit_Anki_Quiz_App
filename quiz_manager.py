@@ -8,23 +8,20 @@ import streamlit as st
 
 class QuizManager:
     def __init__(self):
-        from state_manager import StateManager  # Move import here to avoid circular import
-        self.state = StateManager()  # Initialize state manager
-        
-        # Ensure that the state is set up correctly
-        if 'quiz_started' not in st.session_state:
-            st.session_state.quiz_started = False  # Initialize if not already done
-
+        self.state_manager = StateManager()  # Create instance
         self.state = self._load_or_create_state()
-        # Save state immediately after loading to ensure persistence
-        if self.state.quiz_started:
-            self._save_state()
 
-    def _load_or_create_state(self) -> QuizState:
-        saved_state = StateManager.load_quiz_state()
+    def _load_or_create_state(self):
+        """Load existing state or create new one"""
+        saved_state = self.state_manager.load_quiz_state()  # Use instance method
         if saved_state:
             return QuizState(**saved_state)
         return QuizState()
+
+    def save_state(self):
+        """Save current state"""
+        state_dict = asdict(self.state)
+        self.state_manager.save_quiz_state(state_dict)  # Use instance method
 
     def start_quiz(self, questions: List[Dict[str, Any]], num_questions: int) -> None:
         selected_questions = random.sample(questions, num_questions)
@@ -39,7 +36,7 @@ class QuizManager:
             quiz_started=True,
             score=0
         )
-        self._save_state()
+        self.save_state()
 
     def submit_answer(self, user_answers: List[bool]) -> bool:
         current_question = self.get_current_question()
@@ -66,15 +63,12 @@ class QuizManager:
             self.state.current_options = []
             self.state.current_correct_answers = []
             
-            self._save_state()
+            self.save_state()
             return is_correct
         return False
 
-    def _save_state(self) -> None:
-        StateManager.save_quiz_state(asdict(self.state))
-
     def reset(self) -> None:
-        StateManager.clear_quiz_state()
+        self.state_manager.clear_quiz_state()
         self.state = self._load_or_create_state()
 
     def get_current_question(self) -> Optional[Dict]:
@@ -94,7 +88,7 @@ class QuizManager:
             options, correct_answers = get_shuffled_options(current_question)
             self.state.current_options = options
             self.state.current_correct_answers = correct_answers
-            self._save_state()  # Save state after preparing options
+            self.save_state()  # Save state after preparing options
 
     def calculate_final_score(self) -> tuple[int, int, float]:
         total_questions = len(self.state.answers_given)
@@ -113,7 +107,7 @@ class QuizManager:
         """Toggle flag status for current question"""
         current_idx = self.state.current_question_index
         self.state.flagged_questions[current_idx] = not self.state.flagged_questions[current_idx]
-        self._save_state()
+        self.save_state()
 
     def navigate_to_question(self, question_index: int) -> None:
         """Navigate to a specific question"""
@@ -121,4 +115,4 @@ class QuizManager:
             self.state.current_question_index = question_index
             self.state.current_options = []
             self.state.current_correct_answers = []
-            self._save_state()
+            self.save_state()

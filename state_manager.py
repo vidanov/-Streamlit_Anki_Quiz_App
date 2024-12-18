@@ -1,80 +1,59 @@
 import streamlit as st
 from typing import Dict, Any, Optional
 import json
-import os
 
 class StateManager:
-    STATE_FILE = ".quiz_state.json"
+    def __init__(self):
+        self.QUIZ_STATE_KEY = "quiz_state"
+        self.QUESTIONS_KEY = "current_questions"
 
-    @staticmethod
-    def initialize_state():
-        from quiz_manager import QuizManager  # Move import here to avoid circular import
+    def initialize_state(self):
+        from quiz_manager import QuizManager
         
         # Initialize session state variables
         if 'quiz_manager' not in st.session_state:
-            st.session_state.quiz_manager = QuizManager()  # Now this will work
+            st.session_state.quiz_manager = QuizManager()
         
         if 'uploaded_file' not in st.session_state:
             st.session_state.uploaded_file = None
         
-        if 'current_questions' not in st.session_state:
-            st.session_state.current_questions = []
+        # Try to load questions from session state
+        if self.QUESTIONS_KEY not in st.session_state:
+            st.session_state[self.QUESTIONS_KEY] = []
         
         if 'quiz_started' not in st.session_state:
-            st.session_state.quiz_started = False  # Initialize quiz_started here
+            st.session_state.quiz_started = False
 
-    @staticmethod
-    def save_quiz_state(quiz_state: Dict[str, Any]) -> None:
+    def save_quiz_state(self, quiz_state: Dict[str, Any]) -> None:
         """
-        Save the current quiz state to both session state and file
+        Save the current quiz state to session state
         """
-        st.session_state.quiz_state = quiz_state
+        st.session_state[self.QUIZ_STATE_KEY] = quiz_state
         st.session_state.quiz_state_saved = True
-        
-        # Save to file
-        try:
-            with open(StateManager.STATE_FILE, 'w') as f:
-                json.dump(quiz_state, f)
-        except Exception as e:
-            st.error(f"Failed to save state to file: {e}")
 
-    @staticmethod
-    def load_quiz_state() -> Optional[Dict[str, Any]]:
+    def load_quiz_state(self) -> Optional[Dict[str, Any]]:
         """
-        Load the quiz state from file or session state
+        Load the quiz state from session state
         """
-        # Try session state first
         if st.session_state.get('quiz_state_saved', False):
-            return st.session_state.quiz_state
-            
-        # Try loading from file
-        try:
-            if os.path.exists(StateManager.STATE_FILE):
-                with open(StateManager.STATE_FILE, 'r') as f:
-                    state = json.load(f)
-                    st.session_state.quiz_state = state
-                    st.session_state.quiz_state_saved = True
-                    return state
-        except Exception as e:
-            st.error(f"Failed to load state from file: {e}")
-            
+            return st.session_state.get(self.QUIZ_STATE_KEY)
         return None
 
-    @staticmethod
-    def clear_quiz_state() -> None:
+    def clear_quiz_state(self) -> None:
         """
-        Clear the saved quiz state from both session and file
+        Clear the saved quiz state from session state
         """
-        if 'quiz_state' in st.session_state:
-            del st.session_state.quiz_state
+        if self.QUIZ_STATE_KEY in st.session_state:
+            del st.session_state[self.QUIZ_STATE_KEY]
         if 'quiz_state_saved' in st.session_state:
             del st.session_state.quiz_state_saved
         if 'quiz_started' in st.session_state:
             del st.session_state.quiz_started
-            
-        # Remove state file if it exists
-        try:
-            if os.path.exists(StateManager.STATE_FILE):
-                os.remove(StateManager.STATE_FILE)
-        except Exception as e:
-            st.error(f"Failed to remove state file: {e}")
+        if self.QUESTIONS_KEY in st.session_state:
+            del st.session_state[self.QUESTIONS_KEY]
+
+    def save_questions(self, questions: list) -> None:
+        """
+        Save the current questions to session state
+        """
+        st.session_state[self.QUESTIONS_KEY] = questions
