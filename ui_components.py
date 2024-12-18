@@ -171,10 +171,6 @@ class QuizUI:
 
     @staticmethod
     def _render_single_choice(options: list, question_idx: int, user_answers: list) -> bool:
-        # Render the question with HTML content
-        question_html = f"<div>{options[0]}</div>"  # Assuming options[0] contains the HTML content for the question
-        st.markdown(question_html, unsafe_allow_html=True)
-
         # Use plain text options for the radio buttons
         option_texts = [f"{i + 1}. {opt}" for i, opt in enumerate(options)]
         

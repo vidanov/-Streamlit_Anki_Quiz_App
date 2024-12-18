@@ -15,27 +15,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def load_questions(file: Any) -> List[Dict[str, Any]]:
-    """
-    Load questions from a JSON file or file-like object.
-
-    Parameters
-    ----------
-    file : Any
-        The file path (str) or file-like object to load JSON data from.
-
-    Returns
-    -------
-    List[Dict[str, Any]]
-        A list of dictionaries representing questions.
-    """
-    if isinstance(file, str):
-        # Load from file path
-        with open(file, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    else:
-        # Load from uploaded file-like object
-        return json.load(file)
+def load_questions(file_path: str):
+    """Load questions from a JSON file."""
+    with open(file_path, 'r') as file:
+        questions = json.load(file)
+    return questions
 
 def decompress_anki21b(input_path: str, output_path: str) -> None:
     """

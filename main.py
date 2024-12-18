@@ -142,42 +142,64 @@ def on_file_upload(uploaded_file, quiz_manager: QuizManager):
     return None
 
 def on_reset_files(quiz_manager: QuizManager, state_manager: StateManager):
-    """Handle resetting uploaded files and returning to default questions"""
+    """Handle resetting everything and loading default questions"""
     quiz_manager.reset()
     
+    # Clear all state
     keys_to_clear = {
         'saved_questions', 'current_questions', 'num_questions', 
-        'uploaded_file', 'questions_loaded', 'quiz_started'
+        'uploaded_file', 'questions_loaded', 'quiz_started', 'quiz_state_saved'
     }
     
     for key in keys_to_clear:
         if key in st.session_state:
             del st.session_state[key]
     
+    # Clear storage
     state_manager.clear_quiz_state()
-    st.success("Files have been reset. Using default questions.")
+    
+    # Load default questions
+    try:
+        questions = load_questions("data/default_questions.json")
+        st.session_state.current_questions = questions
+        st.session_state.num_questions = len(questions)
+        st.session_state.questions_loaded = True
+        st.success("Files have been reset. Using default questions.")
+    except FileNotFoundError:
+        st.error("Could not load default questions. Please upload a quiz file.")
+    
     st.rerun()
 
 def on_restart(quiz_manager: QuizManager, state_manager: StateManager):
-    """Handle resetting just the quiz state while preserving uploaded files"""
-    quiz_manager.reset()
-    
+    """Handle resetting just the quiz state while preserving uploaded files and questions"""
+    # Store current questions and file state before reset
     preserved_state = {
         'uploaded_file': st.session_state.get('uploaded_file'),
-        'saved_questions': st.session_state.get('saved_questions'),
         'current_questions': st.session_state.get('current_questions'),
         'num_questions': st.session_state.get('num_questions'),
-        'questions_loaded': st.session_state.get('questions_loaded')
+        'questions_loaded': st.session_state.get('questions_loaded'),
+        'saved_questions': st.session_state.get('saved_questions')
     }
     
+    # Reset quiz state but keep the questions
+    current_questions = quiz_manager.state.current_questions
+    quiz_manager.reset()
+    quiz_manager.state.current_questions = current_questions
+    
+    # Clear only quiz progress state
     if 'quiz_started' in st.session_state:
         del st.session_state.quiz_started
+    if 'quiz_state_saved' in st.session_state:
+        del st.session_state.quiz_state_saved
     
+    # Restore preserved state
     for key, value in preserved_state.items():
         if value is not None:
             st.session_state[key] = value
     
-    state_manager.clear_quiz_state()
+    # Don't clear the questions from state manager
+    quiz_manager.save_state()
+    
     st.success("Quiz has been restarted. You can start a new quiz with the current questions.")
     st.rerun()
 
@@ -210,22 +232,22 @@ def main():
     state_manager = StateManager()
     state_manager.initialize_state()
 
-    # Initialize questions variable
-    questions = None  # or questions = []
-
-    st.set_page_config(page_title="ANKI Quiz", layout="wide")
-    
-    # Initialize quiz manager in session state if not present
+    # Initialize or get quiz manager
     if 'quiz_manager' not in st.session_state:
-        st.session_state.quiz_manager = QuizManager()
+        quiz_manager = QuizManager()
+        quiz_manager.set_state_manager(state_manager)
+        st.session_state.quiz_manager = quiz_manager
     
     quiz_manager = st.session_state.quiz_manager
+    
+    # Load questions from state manager
+    questions = st.session_state.get(state_manager.QUESTIONS_KEY, [])
 
-    # Initialize current_questions and num_questions in session state if not present
+    # Ensure current_questions and num_questions are initialized
     if 'current_questions' not in st.session_state:
-        st.session_state.current_questions = []
+        st.session_state.current_questions = questions
     if 'num_questions' not in st.session_state:
-        st.session_state.num_questions = 0
+        st.session_state.num_questions = len(questions)
 
     # Try to restore saved state first
     saved_state = state_manager.load_quiz_state()
@@ -237,22 +259,17 @@ def main():
             questions = quiz_manager.state.current_questions
             state_manager.save_quiz_state(asdict(quiz_manager.state))
     
-    # Remove file-based state loading
-    if not quiz_manager.state.quiz_started:
-        if 'current_questions' in st.session_state and st.session_state.current_questions:
-            questions = st.session_state.current_questions
-            st.write("Current questions loaded from session state.")
-        elif not st.session_state.get('uploaded_file'):
-            try:
-                questions = load_questions("data/default_questions.json")
-                st.session_state.current_questions = questions
-                st.session_state.num_questions = len(questions)
-                st.info(f"Using default quiz file. Total questions: {len(questions)}")
-            except FileNotFoundError:
-                questions = None
-                st.info("Please upload a quiz file to begin")
-    else:
-        questions = quiz_manager.state.current_questions
+    # Load default questions if no questions are loaded
+    if not quiz_manager.state.quiz_started and not st.session_state.get('questions_loaded', False):
+        try:
+            questions = load_questions("data/default_questions.json")
+            st.session_state.current_questions = questions
+            st.session_state.num_questions = len(questions)
+            st.session_state.questions_loaded = True
+            st.info(f"Using default quiz file. Total questions: {len(questions)}")
+        except FileNotFoundError:
+            questions = None
+            st.info("Please upload a quiz file to begin")
 
     # Update the questions variable based on the session state after file upload
     if st.session_state.get('questions_loaded', False):
@@ -313,7 +330,6 @@ def main():
             quiz_manager
         )
 
-       
     if not quiz_manager.state.quiz_started:
         st.markdown("**Get started by uploading a file in the sidebar and then choose the number of questions.**")
     
