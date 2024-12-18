@@ -69,7 +69,7 @@ def handle_file_upload(uploaded_file):
         """)
         return None
 
-def render_quiz_results(quiz_manager):
+def render_quiz_results(quiz_manager, state_manager):
     st.header("Quiz Results")
     total_score, total_questions, percentage = quiz_manager.calculate_final_score()
     
@@ -131,7 +131,7 @@ def render_quiz_results(quiz_manager):
 
     if st.button("Retake Quiz"):
         quiz_manager.reset()
-        StateManager.clear_quiz_state()
+        state_manager.clear_quiz_state()
         st.rerun()
 
 def on_file_upload(uploaded_file, quiz_manager: QuizManager):
@@ -332,7 +332,7 @@ def main():
         if quiz_manager.is_quiz_complete and all_answered:
             total_score, total_questions, percentage = quiz_manager.calculate_final_score()
             st.success(f"Quiz Completed! Your score: {total_score}/{total_questions} ({percentage:.2f}%)")
-            render_quiz_results(quiz_manager)  # Call to display results
+            render_quiz_results(quiz_manager, state_manager)  # Pass state_manager
         else:
             # Show how many questions still need to be answered
             remaining = sum(1 for answer in quiz_manager.state.answers_given if not answer)
