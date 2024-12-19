@@ -19,9 +19,9 @@ A dynamic Streamlit-based quiz application for creating and managing interactive
 
 ## Example Files
 
-1. **Example Questions (`AWS Practioner AI Generated.txt`):**
+1. **Example Questions (`AWS Practioner AI Generated`):**
    - Preloaded AWS-related questions for use as default content when no `.apkg` file is uploaded.
-2. **Custom Question Template (`Dummy.txt`):**
+2. **Custom Question Template (`Dummy`):**
    - Includes two example questions:
      - Single-choice question: "What is the capital of Germany?"
      - Multiple-choice question: "What are the colors of the German flag?"
@@ -45,13 +45,13 @@ A dynamic Streamlit-based quiz application for creating and managing interactive
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/username/streamlit-quiz-app.git
+   git clone https://github.com/vidanov/Streamlit_Anki_Quiz_App.git
    ```
 
 2. Navigate to the project folder:
 
    ```bash
-   cd streamlit-quiz-app
+   cd Streamlit_Anki_Quiz_App
    ```
 
 3. Install dependencies:
