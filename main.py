@@ -313,7 +313,7 @@ def main():
             )
             st.markdown("# Anki Quiz")
             st.markdown("**Get started by uploading a file in the sidebar and then choose the number of questions.**")
-            st.markdown("To learn more visit https://github.com/vidanov/streamlit_anki_quiz_app/blob/main/main.py")
+            st.markdown("To learn more visit https://github.com/vidanov/streamlit_anki_quiz_app/")
     
     # Show results if quiz is completed
     if quiz_manager.state.quiz_completed:
