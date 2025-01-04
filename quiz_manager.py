@@ -6,7 +6,7 @@ from state_manager import StateManager
 from quiz_state import QuizState
 import streamlit as st
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,12 @@ class QuizManager:
         self.state.quiz_started = True
         self.state.quiz_completed = False
         self.state.score = 0  # Reset score
+        
+        # Initialize timer
+        self.state.start_time = datetime.now()
+        self.state.end_time = self.state.start_time + timedelta(minutes=2 * len(selected_questions))
+        self.state.completion_time = None
+        
         self.save_state()
 
     def should_complete_quiz(self) -> bool:
