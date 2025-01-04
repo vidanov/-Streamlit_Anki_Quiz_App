@@ -1,8 +1,11 @@
 import streamlit as st
 from typing import Callable, Dict, Any
 from quiz_manager import QuizManager
-from processor import get_question_type
+from processor import get_question_type, check_answer
 import os
+from datetime import datetime, timedelta
+import base64
+from timer_component import timer_component
 
 class QuizUI:
     @staticmethod
@@ -39,6 +42,23 @@ class QuizUI:
     @staticmethod
     def render_question_navigation(quiz_manager: QuizManager, on_restart: Callable, state_manager=None) -> None:
         st.sidebar.markdown("# Anki Quiz")
+        
+        # Timer logic
+        if not quiz_manager.state.start_time:
+            quiz_manager.state.start_time = datetime.now()
+            total_questions = len(quiz_manager.state.current_questions)
+            quiz_manager.state.end_time = quiz_manager.state.start_time + timedelta(minutes=2 * total_questions)
+            quiz_manager.save_state()
+        
+        # Create timer component
+        timer_component(quiz_manager.state.end_time.isoformat())
+        
+        # Check if time's up
+        if datetime.now() >= quiz_manager.state.end_time:
+            if not quiz_manager.state.quiz_completed:
+                quiz_manager.complete_quiz()
+                st.rerun()
+        
         st.sidebar.markdown("### Questions")
         
         total_questions = len(quiz_manager.state.current_questions)
@@ -81,6 +101,8 @@ class QuizUI:
         
         # Add Submit Quiz button
         if st.sidebar.button("📝 Show all answers", use_container_width=True, key="submit_quiz"):
+            if not quiz_manager.state.completion_time:  # Only set if not already set
+                quiz_manager.state.completion_time = datetime.now()
             quiz_manager.complete_quiz()
             st.rerun()
         
@@ -241,3 +263,91 @@ class QuizUI:
             return False
         
         return num_selected == num_correct or changed
+
+    @staticmethod
+    def render_quiz_results(quiz_manager, state_manager, on_retake_quiz: Callable):
+        st.header("Quiz Results")
+        total_score, total_questions, percentage = quiz_manager.calculate_final_score()
+
+        # Calculate time statistics
+        if quiz_manager.state.completion_time and quiz_manager.state.start_time:
+            time_taken = quiz_manager.state.completion_time - quiz_manager.state.start_time
+            total_seconds = int(time_taken.total_seconds())
+            minutes = total_seconds // 60
+            seconds = total_seconds % 60
+            
+            # Calculate average time per question
+            avg_seconds = total_seconds / total_questions
+            avg_minutes = int(avg_seconds // 60)
+            avg_seconds = int(avg_seconds % 60)
+            
+            # Display time statistics in a more prominent way
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("⏱️ Total Time", f"{minutes:02d}:{seconds:02d}")
+            with col2:
+                st.metric("⌛ Average Time per Question", f"{avg_minutes:02d}:{avg_seconds:02d}")
+
+        # Score display
+        st.success(f"**Final Score:** {total_score}/{total_questions} ({percentage:.1f}%)")
+        
+        if percentage >= 85:
+            st.balloons()
+            st.success("🎉 Excellent! You've passed with distinction!")
+        elif percentage >= 75:
+            st.success("✨ Congratulations! You've passed!")
+        else:
+            st.warning("Good effort! Review missed answers and try again.")
+        
+        st.markdown("---")
+        
+        # Loop over each question and show results
+        for i, question in enumerate(quiz_manager.state.current_questions):
+            # Get user's answer for this question
+            user_answer = quiz_manager.state.answers_given[i] if i < len(quiz_manager.state.answers_given) else None
+            
+            # Use the stored display options that were shown during the quiz
+            options = question.get("display_options", [])
+            correct_answers = question.get("display_correct_answers", [])
+            
+            # Skip if we don't have valid answers
+            if not user_answer or not options or not correct_answers:
+                continue
+            
+            is_correct = check_answer(user_answer, correct_answers)
+            correctness_str = "✅ correct" if is_correct else "❌ wrong"
+
+            st.markdown(f"### Question {i + 1} - {correctness_str}")
+            st.markdown(question['Question'], unsafe_allow_html=True)
+            
+            st.write("##### Answers:")
+            for j, option in enumerate(options):
+                if j >= len(user_answer) or j >= len(correct_answers):
+                    break
+                
+                prefix = ""
+                suffix = ""
+                
+                if user_answer[j] and correct_answers[j]:
+                    prefix = "<div style='color:green; padding: 5px; border: 1px green solid;'>✓"
+                    suffix = "<span style='float: right;'>Your answer</span></div>"
+                elif user_answer[j] and not correct_answers[j]:
+                    prefix = "<div style='color:red; padding: 5px; border: 1px red solid;'>⨂"
+                    suffix = "<span style='float: right;'>Your answer</span></div>"
+                elif not user_answer[j] and correct_answers[j]:
+                    prefix = "<div style='color:green; padding: 5px; border: 1px green solid;'>✓"
+                    suffix = "<span style='float: right;'>Correct answer</span></div>"
+                else:
+                    prefix = "<div style='padding:5px;'>⨂"
+                    suffix = "</div>"
+                
+                st.markdown(f"{prefix} {option}{suffix}", unsafe_allow_html=True)
+            
+            if question.get('Extra_1'):
+                st.markdown("**Explanation:**")
+                st.markdown(question['Extra_1'], unsafe_allow_html=True)
+            
+            st.markdown("---")
+
+        if st.button("🔄 Retake Quiz", key="retake_quiz_button"):
+            on_retake_quiz(quiz_manager, state_manager)

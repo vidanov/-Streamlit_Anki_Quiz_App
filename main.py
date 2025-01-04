@@ -16,6 +16,40 @@ import logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Add global JavaScript for timer
+st.set_page_config(page_title="Anki Quiz", page_icon="📚", layout="wide")
+
+# Add global timer script
+st.markdown("""
+    <script>
+        function startTimer(endTimeStr) {
+            const endTime = new Date(endTimeStr);
+            
+            function updateTimer() {
+                const timer = document.getElementById('quiz-timer');
+                if (timer) {
+                    const now = new Date();
+                    const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+                    const minutes = Math.floor(remaining / 60);
+                    const seconds = remaining % 60;
+                    
+                    if (remaining > 0) {
+                        timer.innerHTML = '⏱️ Time Remaining: ' + 
+                            String(minutes).padStart(2, '0') + ':' + 
+                            String(seconds).padStart(2, '0');
+                        window.requestAnimationFrame(updateTimer);
+                    } else {
+                        timer.innerHTML = '⏱️ Time\'s Up!';
+                        window.location.reload();
+                    }
+                }
+            }
+            
+            window.requestAnimationFrame(updateTimer);
+        }
+    </script>
+""", unsafe_allow_html=True)
+
 def handle_file_upload(uploaded_file):
     try:
         with st.spinner("Converting Anki deck..."):
@@ -364,8 +398,7 @@ def main():
     if quiz_manager.state.quiz_completed:
         st.markdown("---")
         total_score, total_questions, percentage = quiz_manager.calculate_final_score()
-        st.success(f"Quiz Completed! Your score: {total_score}/{total_questions} ({percentage:.2f}%)")
-        render_quiz_results(quiz_manager, state_manager)
+        QuizUI.render_quiz_results(quiz_manager, state_manager, on_retake_quiz)
         
         
     # Add version number in footer

@@ -1,18 +1,22 @@
-from dataclasses import dataclass
-from typing import List, Any, Optional
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 @dataclass
 class QuizState:
-    current_questions: List[dict] = None
+    current_questions: List[Dict] = field(default_factory=list)
     current_question_index: int = 0
-    current_options: List[str] = None
-    current_correct_answers: List[bool] = None
-    answers_given: List[Any] = None
-    flagged_questions: List[bool] = None
-    quiz_completed: bool = False
+    current_options: List[str] = field(default_factory=list)
+    current_correct_answers: List[int] = field(default_factory=list)
+    answers_given: List[List[bool]] = field(default_factory=list)
+    flagged_questions: List[bool] = field(default_factory=list)
     quiz_started: bool = False
+    quiz_completed: bool = False
     score: int = 0
-    is_quiz_complete: bool = False
+    # Timer fields
+    start_time: Optional[datetime] = field(default=None)
+    end_time: Optional[datetime] = field(default=None)
+    completion_time: Optional[datetime] = field(default=None)
 
     def __post_init__(self):
         if self.current_questions is None:

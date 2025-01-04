@@ -6,6 +6,7 @@ from state_manager import StateManager
 from quiz_state import QuizState
 import streamlit as st
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,7 @@ class QuizManager:
             
             # If we should complete the quiz
             if self.should_complete_quiz():
+                self.state.completion_time = datetime.now()  # Set completion time
                 self.state.quiz_completed = True
                 self.state.quiz_started = False
                 self.save_state()
@@ -199,6 +201,10 @@ class QuizManager:
                 self.state.answers_given.append([False] * len(self.state.current_options))
             elif self.state.answers_given[i] is None:
                 self.state.answers_given[i] = [False] * len(self.state.current_options)
+        
+        # Record completion time
+        if not self.state.completion_time:  # Only set if not already set
+            self.state.completion_time = datetime.now()
         
         self.state.quiz_completed = True
         self.state.quiz_started = False
