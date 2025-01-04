@@ -5,6 +5,9 @@ from processor import parse_answers, check_answer, get_question_type, get_shuffl
 from state_manager import StateManager
 from quiz_state import QuizState
 import streamlit as st
+import logging
+
+logger = logging.getLogger(__name__)
 
 class QuizManager:
     def __init__(self):
@@ -31,12 +34,20 @@ class QuizManager:
         # Randomly select questions if needed
         selected_questions = questions[:num_questions]
         
+        # Clear any stored display options
+        for question in selected_questions:
+            if "display_options" in question:
+                del question["display_options"]
+            if "display_correct_answers" in question:
+                del question["display_correct_answers"]
+        
         self.state.current_questions = selected_questions
         self.state.current_question_index = 0
         self.state.answers_given = [None] * len(selected_questions)  # Initialize with None
         self.state.flagged_questions = [False] * len(selected_questions)
         self.state.quiz_started = True
         self.state.quiz_completed = False
+        self.state.score = 0  # Reset score
         self.save_state()
 
     def should_complete_quiz(self) -> bool:
@@ -66,11 +77,15 @@ class QuizManager:
             if self.state.answers_given is None:
                 self.state.answers_given = [None] * len(self.state.current_questions)
             
-            # Save the answer
-            self.state.answers_given[self.state.current_question_index] = user_answers
+            # Get the current options and correct answers
+            options = current_question.get("display_options", [])
+            correct_answers = current_question.get("display_correct_answers", [])
             
-            # Check if answer is correct
-            is_correct = check_answer(user_answers, self.state.current_correct_answers)
+            # Save the answer aligned with the current options
+            self.state.answers_given[self.state.current_question_index] = user_answers.copy()
+            
+            # Check if answer is correct using the current correct answers
+            is_correct = check_answer(user_answers, correct_answers)
             if is_correct:
                 self.state.score += 1
             
@@ -122,14 +137,28 @@ class QuizManager:
             return self.state.current_questions[self.state.current_question_index]
         return None
 
+    
     def prepare_question_options(self) -> None:
         current_question = self.get_current_question()
         if current_question:
-            # Always prepare new options for each question
-            options, correct_answers = get_shuffled_options(current_question)
+            # Always use stored options if they exist
+            if "display_options" in current_question:
+                # Use the previously stored (shuffled) options
+                options = current_question["display_options"]
+                correct_answers = current_question["display_correct_answers"]
+                logger.debug(f"Using stored options: {options}")
+            else:
+                # First time seeing this question, shuffle and store
+                options, correct_answers, _ = get_shuffled_options(current_question)
+                # Store them in the question for persistence
+                current_question["display_options"] = options.copy()
+                current_question["display_correct_answers"] = correct_answers.copy()
+                logger.debug(f"Generated new shuffled options: {options}")
+            
+            # Always update the state with current options
             self.state.current_options = options
             self.state.current_correct_answers = correct_answers
-            self.save_state()  # Save state after preparing options
+            self.save_state()
 
     def calculate_final_score(self) -> tuple[int, int, float]:
         total_questions = len(self.state.answers_given)
@@ -154,8 +183,8 @@ class QuizManager:
         """Navigate to a specific question"""
         if 0 <= question_index < len(self.state.current_questions):
             self.state.current_question_index = question_index
-            self.state.current_options = []
-            self.state.current_correct_answers = []
+            # Don't clear options and answers anymore
+            self.prepare_question_options()  # Ensure options are loaded
             self.save_state()
 
     def complete_quiz(self):

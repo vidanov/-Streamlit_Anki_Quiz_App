@@ -55,38 +55,35 @@ def get_question_type(question: Dict[str, Any]) -> Tuple[str, int]:
     num_correct = sum(correct_answers)
     return ('single' if num_correct == 1 else 'multiple', num_correct)
 
-def get_shuffled_options(question: Dict[str, Any]) -> Tuple[List[str], List[int]]:
+def get_shuffled_options(question: Dict[str, Any]) -> Tuple[List[str], List[int], List[int]]:
     """
     Get shuffled answer options and their corresponding correct answers.
-
-    Parameters
-    ----------
-    question : Dict[str, Any]
-        A dictionary representing a question, including its 'Answers' and 'Q_1'...'Q_6' fields.
-
-    Returns
-    -------
-    Tuple[List[str], List[int]]
-        A tuple (shuffled_options, new_correct_answers) where:
-        - shuffled_options is a list of option strings.
-        - new_correct_answers is a list of ints (1 or 0) aligned with shuffled_options.
     """
-    options = []
+    # Create pairs of (option, answer, index)
+    pairs = []
     correct_answers = parse_answers(question['Answers'][0])
     
-    # Collect non-empty options and their corresponding correct answers
+    # Collect non-empty options with their answers and indices
     for i in range(1, 7):  # Q_1 through Q_6
         option = question.get(f'Q_{i}', '').strip()
         if option:
             answer = correct_answers[i-1] if i-1 < len(correct_answers) else 0
-            options.append((option, answer))
+            pairs.append((option, answer, i-1))
     
-    random.shuffle(options)
+    # Shuffle the pairs together
+    random.shuffle(pairs)
     
-    shuffled_options = [opt for opt, _ in options]
-    new_correct_answers = [ans for _, ans in options]
+    # Unzip the pairs into separate lists
+    shuffled_options = []
+    shuffled_answers = []
+    original_indices = []
     
-    return shuffled_options, new_correct_answers
+    for opt, ans, idx in pairs:
+        shuffled_options.append(opt)
+        shuffled_answers.append(ans)
+        original_indices.append(idx)
+    
+    return shuffled_options, shuffled_answers, original_indices
 
 def validate_question_format(question: Dict) -> tuple[bool, str]:
     """Validate if the question has the required fields"""

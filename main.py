@@ -13,7 +13,7 @@ from typing import Callable
 import logging
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def handle_file_upload(uploaded_file):
@@ -63,10 +63,51 @@ def handle_file_upload(uploaded_file):
         """)
         return None
 
+def on_retake_quiz(quiz_manager: QuizManager, state_manager: StateManager):
+    """Handle retaking the current quiz with the same questions"""
+    logger.debug("Retaking current quiz")
+    
+    # Store the current questions with their display options
+    current_questions = []
+    for question in quiz_manager.state.current_questions:
+        # Create a deep copy of the question to preserve display options
+        q_copy = question.copy()
+        if "display_options" in question:
+            q_copy["display_options"] = question["display_options"].copy()
+            q_copy["display_correct_answers"] = question["display_correct_answers"].copy()
+        current_questions.append(q_copy)
+    
+    num_questions = len(current_questions)
+    logger.debug(f"Preserved questions with options: {current_questions}")
+    
+    # Reset quiz state
+    quiz_manager.reset()
+    
+    # Clear quiz-related session state
+    quiz_related_keys = [
+        'quiz_started', 'quiz_state_saved', 'last_question_message',
+        'quiz_completed', 'is_quiz_complete'
+    ]
+    for key in quiz_related_keys:
+        if key in st.session_state:
+            del st.session_state[key]
+    
+    # Start fresh quiz with the same questions and preserved options
+    quiz_manager.start_quiz(current_questions, num_questions)
+    st.session_state.quiz_started = True
+    
+    # Save the new state
+    quiz_manager.save_state()
+    state_manager.save_quiz_state(asdict(quiz_manager.state))
+    
+    logger.debug("Quiz restarted with preserved options")
+    st.rerun()
+
 def render_quiz_results(quiz_manager, state_manager):
+
     st.header("Quiz Results")
     total_score, total_questions, percentage = quiz_manager.calculate_final_score()
-    
+
     st.success(f"**Final Score:** {total_score}/{total_questions} ({percentage:.1f}%)")
     
     if percentage >= 85:
@@ -79,18 +120,27 @@ def render_quiz_results(quiz_manager, state_manager):
     
     st.markdown("---")
     
-    for i, (question, user_answer) in enumerate(zip(quiz_manager.state.current_questions, 
-                                                  quiz_manager.state.answers_given)):
-        options, correct_answers = get_shuffled_options(question)
+    # Loop over each question and the user's chosen answers
+    for i, question in enumerate(quiz_manager.state.current_questions):
+        # Get user's answer for this question
+        user_answer = quiz_manager.state.answers_given[i] if i < len(quiz_manager.state.answers_given) else None
+        logger.debug(f"Question {i + 1} - User answer: {user_answer}")
         
-        # Ensure user_answer and correct_answers have the same length
-        max_len = max(len(user_answer), len(correct_answers))
-        user_answer = user_answer[:max_len] + [False] * (max_len - len(user_answer))
-        correct_answers = correct_answers[:max_len] + [0] * (max_len - len(correct_answers))
+        # Use the stored display options that were shown during the quiz
+        options = question.get("display_options", [])
+        correct_answers = question.get("display_correct_answers", [])
+        
+        logger.debug(f"Question {i + 1} - Options: {options}")
+        logger.debug(f"Question {i + 1} - Correct answers: {correct_answers}")
+        
+        # Skip if we don't have valid answers
+        if not user_answer or not options or not correct_answers:
+            logger.warning(f"Skipping question {i + 1} due to missing data")
+            continue
         
         is_correct = check_answer(user_answer, correct_answers)
-        
         correctness_str = "✅ correct" if is_correct else "❌ wrong"
+
         st.markdown(f"### Question {i + 1} - {correctness_str}")
         st.markdown(question['Question'], unsafe_allow_html=True)
         
@@ -98,7 +148,7 @@ def render_quiz_results(quiz_manager, state_manager):
         for j, option in enumerate(options):
             if j >= len(user_answer) or j >= len(correct_answers):
                 break
-                
+            
             prefix = ""
             suffix = ""
             
@@ -123,13 +173,9 @@ def render_quiz_results(quiz_manager, state_manager):
         
         st.markdown("---")
 
-    # Store current questions before resetting
-    if st.button("Retake Quiz"):
-        current_questions = quiz_manager.state.current_questions.copy()  # Preserve questions
-        quiz_manager.reset()
-        # Start a new quiz with the same questions
-        quiz_manager.start_quiz(current_questions)
-        st.rerun()
+    if st.button("🔄 Retake Quiz", key="retake_quiz_button"):
+        logger.debug("Retake Quiz button clicked")
+        on_retake_quiz(quiz_manager, state_manager)
 
 def on_file_upload(uploaded_file, quiz_manager: QuizManager):
     questions = handle_file_upload(uploaded_file)
@@ -145,10 +191,9 @@ def on_file_upload(uploaded_file, quiz_manager: QuizManager):
     return None
 
 def on_reset_files(quiz_manager: QuizManager, state_manager: StateManager):
-    """Handle resetting everything and loading default questions"""
+    logger.debug("Resetting files and loading default questions")
     quiz_manager.reset()
     
-    # Clear all state
     keys_to_clear = {
         'saved_questions', 'current_questions', 'num_questions', 
         'uploaded_file', 'questions_loaded', 'quiz_started', 'quiz_state_saved'
@@ -158,55 +203,55 @@ def on_reset_files(quiz_manager: QuizManager, state_manager: StateManager):
         if key in st.session_state:
             del st.session_state[key]
     
-    # Clear storage
     state_manager.clear_quiz_state()
     
-    # Load default questions
     try:
         questions = load_questions("data/default_questions.json")
         st.session_state.current_questions = questions
         st.session_state.num_questions = len(questions)
         st.session_state.questions_loaded = True
         st.success("Files have been reset. Using default questions.")
+        logger.debug("Default questions loaded: %s", questions)
     except FileNotFoundError:
         st.error("Could not load default questions. Please upload a quiz file.")
+        logger.error("Default questions file not found")
     
     st.rerun()
 
 def on_restart(quiz_manager: QuizManager, state_manager: StateManager):
-    """Handle resetting just the quiz state while preserving uploaded files and questions"""
-    # Store current questions and file state before reset
+    """Handle resetting the quiz completely and return to setup state"""
+    logger.debug("Restarting quiz - returning to setup")
+    
+    # Reset quiz manager
+    quiz_manager.reset()
+    
+    # Preserve only the uploaded file and questions
     preserved_state = {
         'uploaded_file': st.session_state.get('uploaded_file'),
-        'current_questions': st.session_state.get('current_questions'),
-        'num_questions': st.session_state.get('num_questions'),
-        'questions_loaded': st.session_state.get('questions_loaded'),
-        'saved_questions': st.session_state.get('saved_questions')
+        'saved_questions': st.session_state.get('saved_questions'),
+        'questions_loaded': True  # Keep this flag to show the setup options
     }
     
-    # Reset quiz state but keep the questions
-    current_questions = quiz_manager.state.current_questions
-    quiz_manager.reset()
-    quiz_manager.state.current_questions = current_questions
-    
-    # Clear only quiz progress state
-    if 'quiz_started' in st.session_state:
-        del st.session_state.quiz_started
-    if 'quiz_state_saved' in st.session_state:
-        del st.session_state.quiz_state_saved
+    # Clear all session state
+    for key in list(st.session_state.keys()):
+        if key not in preserved_state:
+            del st.session_state[key]
     
     # Restore preserved state
     for key, value in preserved_state.items():
         if value is not None:
             st.session_state[key] = value
     
-    # Don't clear the questions from state manager
-    quiz_manager.save_state()
+    # If we have saved questions, restore them as current_questions
+    if 'saved_questions' in st.session_state:
+        st.session_state.current_questions = st.session_state.saved_questions
+        st.session_state.num_questions = len(st.session_state.saved_questions)
     
-    st.success("Quiz has been restarted. You can start a new quiz with the current questions.")
+    logger.debug("Quiz reset to setup state")
     st.rerun()
 
 def on_start_quiz(questions, num_questions, quiz_manager: QuizManager, state_manager: StateManager):
+    logger.debug("Starting quiz with %d questions", num_questions)
     if not questions:
         st.error("No questions available. Please upload a quiz file or use the default questions.")
         return
@@ -223,11 +268,11 @@ def on_start_quiz(questions, num_questions, quiz_manager: QuizManager, state_man
         st.warning(f"Requested {num_questions} questions, but only {len(questions)} are available. Using all available questions.")
         num_questions = len(questions)
     
-    # Store the quiz state before starting
     st.session_state.saved_questions = questions
     quiz_manager.start_quiz(questions, num_questions)
     st.session_state.quiz_started = True
     state_manager.save_quiz_state(asdict(quiz_manager.state))
+    logger.debug("Quiz started with questions: %s", questions)
     st.rerun()
 
 def main():
@@ -322,15 +367,12 @@ def main():
         st.success(f"Quiz Completed! Your score: {total_score}/{total_questions} ({percentage:.2f}%)")
         render_quiz_results(quiz_manager, state_manager)
         
-        # Add a button to start a new quiz
-        if st.button("Start New Quiz", key="new_quiz"):
-            on_restart(quiz_manager, state_manager)
-    
+        
     # Add version number in footer
     st.markdown("""
     ---
     <div style='text-align: center; color: #666; padding: 10px;'>
-    Streamlit Anki Quiz App v1.0.2
+    Streamlit Anki Quiz App v1.0.3
     </div>
     """, unsafe_allow_html=True)
 

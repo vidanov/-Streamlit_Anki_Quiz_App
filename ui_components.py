@@ -35,10 +35,6 @@ class QuizUI:
                 if st.button("Start Quiz", key="start_quiz"):
                     on_start_quiz(questions, num_questions)
             
-            # Only show the Reset Files button if a file has been uploaded and is not None
-            if 'uploaded_file' in st.session_state and st.session_state.uploaded_file is not None:
-                if st.button("Reset Files", key="reset_files"):
-                    on_reset_files(quiz_manager)
 
     @staticmethod
     def render_question_navigation(quiz_manager: QuizManager, on_restart: Callable, state_manager=None) -> None:
@@ -135,23 +131,18 @@ class QuizUI:
         # Display the question title
         question_title = current_question.get('Question', 'No Title Available')
         st.markdown(f"""
-    <h3>{flag}{question_title}</h3>
+    <strong>{flag}{question_title}</strong>
 """, unsafe_allow_html=True)
-
-        # Extract options and render them
-        options = []
-        for i in range(1, 7):
-            key = f"Q_{i}"
-            if key in current_question and current_question[key].strip():
-                options.append(current_question[key])
-
-        if not options:
-            st.error("The current question does not contain any options.")
-            return
 
         # Prepare options if not already prepared
         quiz_manager.prepare_question_options()
         question_type, num_correct = get_question_type(current_question)
+        
+        # Use the stored display options instead of extracting from question
+        options = current_question.get("display_options", [])
+        if not options:
+            st.error("The current question does not contain any options.")
+            return
 
         # Display the number of correct answers needed
         if question_type != 'single':
@@ -193,8 +184,8 @@ class QuizUI:
 
     @staticmethod
     def _render_single_choice(options: list, question_idx: int, user_answers: list) -> bool:
-        # Use plain text options for the radio buttons
-        option_texts = [f"{i + 1}. {opt}" for i, opt in enumerate(options)]
+        # Create option texts without numbers to avoid confusion
+        option_texts = options.copy()  # Just use the options directly
         
         # Find the currently selected option
         selected_index = None
@@ -206,14 +197,19 @@ class QuizUI:
             "Select your answer:",
             options=option_texts,
             key=f"q_{question_idx}_radio",
-            index=selected_index
+            index=selected_index if selected_index is not None else 0
         )
 
-        if selected_option is not None:
-            selected_idx = option_texts.index(selected_option)
+        # Update user_answers based on selection
+        if selected_option:
+            # Clear previous selection
             for i in range(len(user_answers)):
-                user_answers[i] = (i == selected_idx)
+                user_answers[i] = False
+            # Set new selection based on the actual selected option
+            selected_idx = option_texts.index(selected_option)
+            user_answers[selected_idx] = True
             return True
+            
         return False
 
     @staticmethod
