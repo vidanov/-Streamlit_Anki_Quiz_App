@@ -43,23 +43,15 @@ class QuizUI:
     def render_question_navigation(quiz_manager: QuizManager, on_restart: Callable, state_manager=None) -> None:
         st.sidebar.markdown("# Anki Quiz")
         
-        # Timer logic - only initialize if not already set and quiz is just starting
-        if not quiz_manager.state.start_time and quiz_manager.state.quiz_started:
-            quiz_manager.state.start_time = datetime.now()
-            total_questions = len(quiz_manager.state.current_questions)
-            quiz_manager.state.end_time = quiz_manager.state.start_time + timedelta(minutes=2 * total_questions)
-            quiz_manager.save_state()
-            st.rerun()  # Only rerun once when initializing timer
-        
-        # Create timer component only if timer is initialized
+        # Create timer component if end_time exists
         if quiz_manager.state.end_time:
             timer_component(quiz_manager.state.end_time.isoformat())
-        
-        # Check if time's up
-        if quiz_manager.state.end_time and datetime.now() >= quiz_manager.state.end_time:
-            if not quiz_manager.state.quiz_completed:
-                quiz_manager.complete_quiz()
-                st.rerun()
+            
+            # Check if time's up
+            if datetime.now() >= quiz_manager.state.end_time:
+                if not quiz_manager.state.quiz_completed:
+                    quiz_manager.complete_quiz()
+                    st.rerun()
         
         st.sidebar.markdown("### Questions")
         
