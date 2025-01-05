@@ -364,7 +364,6 @@ def main():
     if quiz_manager.state.quiz_completed:
         st.markdown("---")
         total_score, total_questions, percentage = quiz_manager.calculate_final_score()
-        st.success(f"Quiz Completed! Your score: {total_score}/{total_questions} ({percentage:.2f}%)")
         render_quiz_results(quiz_manager, state_manager)
         
         
