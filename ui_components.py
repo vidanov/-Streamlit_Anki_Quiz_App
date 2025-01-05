@@ -185,19 +185,20 @@ class QuizUI:
     @staticmethod
     def _render_single_choice(options: list, question_idx: int, user_answers: list) -> bool:
         # Create option texts without numbers to avoid confusion
-        option_texts = options.copy()  # Just use the options directly
+        option_texts = options.copy()
         
         # Find the currently selected option
         selected_index = None
         if user_answers and any(user_answers):
             selected_index = user_answers.index(True)
         
-        # Create the radio button with the correct initial selection
+        # Create the radio button with no default selection
         selected_option = st.radio(
             "Select your answer:",
             options=option_texts,
             key=f"q_{question_idx}_radio",
-            index=selected_index if selected_index is not None else 0
+            index=selected_index if selected_index is not None else None,
+            label_visibility="visible"
         )
 
         # Update user_answers based on selection
