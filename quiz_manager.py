@@ -201,12 +201,28 @@ class QuizManager:
         if self.state.answers_given is None:
             self.state.answers_given = []
         
+        # Prepare options for all questions if not already prepared
+        for i, question in enumerate(self.state.current_questions):
+            if "display_options" not in question:
+                # Store current question index
+                original_index = self.state.current_question_index
+                
+                # Temporarily set index to prepare options
+                self.state.current_question_index = i
+                self.prepare_question_options()
+                
+                # Restore original index
+                self.state.current_question_index = original_index
+        
         # Fill any unanswered questions with empty answers
         for i in range(len(self.state.current_questions)):
+            question = self.state.current_questions[i]
+            options = question.get("display_options", [])
+            
             if i >= len(self.state.answers_given):
-                self.state.answers_given.append([False] * len(self.state.current_options))
+                self.state.answers_given.append([False] * len(options))
             elif self.state.answers_given[i] is None:
-                self.state.answers_given[i] = [False] * len(self.state.current_options)
+                self.state.answers_given[i] = [False] * len(options)
         
         # Record completion time
         if not self.state.completion_time:  # Only set if not already set
