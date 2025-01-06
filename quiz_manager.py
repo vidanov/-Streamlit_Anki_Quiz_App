@@ -193,12 +193,19 @@ class QuizManager:
         if self.state.answers_given is None:
             self.state.answers_given = []
         
-        # Fill any unanswered questions with empty answers
-        for i in range(len(self.state.current_questions)):
+        # Prepare all questions to ensure they have display options
+        for i, question in enumerate(self.state.current_questions):
+            # Prepare options for questions that haven't been visited
+            if "display_options" not in question:
+                options, correct_answers, _ = get_shuffled_options(question)
+                question["display_options"] = options
+                question["display_correct_answers"] = correct_answers
+            
+            # Fill any unanswered questions with empty answers
             if i >= len(self.state.answers_given):
-                self.state.answers_given.append([False] * len(self.state.current_options))
+                self.state.answers_given.append([False] * len(question["display_options"]))
             elif self.state.answers_given[i] is None:
-                self.state.answers_given[i] = [False] * len(self.state.current_options)
+                self.state.answers_given[i] = [False] * len(question["display_options"])
         
         self.state.quiz_completed = True
         self.state.quiz_started = False
