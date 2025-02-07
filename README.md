@@ -1,10 +1,20 @@
-# Streamlit Quiz App
+<!--# Streamlit Quiz App-->
 
 ## Description
 
 A dynamic Streamlit-based quiz application for creating and managing interactive quizzes. This repository includes example `.apkg` files for both default questions and templates to create your own quizzes in the Anki app. The example files are also provided in text format for reference.
 
 ---
+## How to Use
+
+### Tutorial Video
+Watch the tutorial video to get started quickly:
+- [📺 Watch Tutorial](https://www.youtube.com/watch?v=lOPdTEZHaf4)
+
+### Blog Guide
+For more detailed instructions and tips, check out our comprehensive guide:
+- [📚 Simplify Learning with the Streamlit Anki Quiz App](https://vidanov.com/blog/simplify-learning-with-the-streamlit-anki-quiz-app/)
+
 
 ## Features
 

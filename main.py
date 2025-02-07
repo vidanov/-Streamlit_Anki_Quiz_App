@@ -357,8 +357,29 @@ def main():
                 quiz_manager
             )
             st.markdown("# Anki Quiz")
-            st.markdown("**Get started by uploading a file in the sidebar and then choose the number of questions.**")
-            st.markdown("To learn more visit https://github.com/vidanov/streamlit_anki_quiz_app/")
+                        # Add video tutorial
+            st.subheader("📺 Watch Tutorial")
+            st.video("https://www.youtube.com/watch?v=lOPdTEZHaf4")
+            
+            # Add blog link with some context
+            st.markdown("---")
+            st.subheader("📚 Getting Started")
+            st.markdown("""
+            1. Upload your Anki deck file (.apkg) using the sidebar
+            2. Choose the number of questions you want to practice
+            3. Start the quiz and test your knowledge!
+            
+            For detailed setup instructions and tips, check out our [comprehensive guide](https://vidanov.com/blog/simplify-learning-with-the-streamlit-anki-quiz-app/)
+            """)
+            
+            st.markdown("---")
+            st.markdown("### Quick Start")
+            st.markdown("""
+            - The app supports standard Anki deck files (.apkg)
+            - Questions can include text, images, and formatted content
+            - Track your progress and review incorrect answers
+            - Retake quizzes to improve your scores
+            """)
     
     # Show results if quiz is completed
     if quiz_manager.state.quiz_completed:
